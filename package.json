@@ -1,0 +1,9 @@
+{
+  "name": "com.deaphead.collision-system",
+  "displayName": "Select Scene Tool",
+  "version" : "1.0.0",
+  "description": "Easy scene selection in Unity Editor",
+  "author": { "name": "@oPlayI", "email": "2190055@gmail.com" },
+  "keywords": ["scenes", "unity"],
+  "dependencies": {}
+}
