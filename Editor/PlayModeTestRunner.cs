@@ -7,6 +7,9 @@ namespace EditorTool.SceneSelectTool
     [InitializeOnLoad]
     internal static class PlayModeTestRunner
     {
+        private static TestRunnerApi sTestRunnerApi;
+        private static MasterScenePlayModeTestCallbacks sTestCallbacks;
+
         static PlayModeTestRunner()
         {
             RegisterCallbacks();
@@ -46,9 +49,11 @@ namespace EditorTool.SceneSelectTool
 
         private static void RegisterCallbacks()
         {
+            sTestCallbacks = new MasterScenePlayModeTestCallbacks();
+
 #pragma warning disable CS0618
-            var testRunnerApi = ScriptableObject.CreateInstance<TestRunnerApi>();
-            testRunnerApi.RegisterCallbacks(new MasterScenePlayModeTestCallbacks(), int.MinValue);
+            sTestRunnerApi = ScriptableObject.CreateInstance<TestRunnerApi>();
+            sTestRunnerApi.RegisterCallbacks(sTestCallbacks, int.MaxValue);
 #pragma warning restore CS0618
         }
 
@@ -56,7 +61,6 @@ namespace EditorTool.SceneSelectTool
         {
             public void RunStarted(ITestAdaptor testsToRun)
             {
-                SceneAutoLoader.SuppressMasterSceneLoading = true;
             }
 
             public void RunFinished(ITestResultAdaptor result)

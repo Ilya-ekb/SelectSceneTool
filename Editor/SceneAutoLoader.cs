@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Reflection;
 using UnityEditor;
 using UnityEngine.SceneManagement;
 using UnityEditor.SceneManagement;
@@ -116,12 +117,31 @@ namespace EditorTool.SceneSelectTool
 
         private static bool ShouldSkipMasterSceneLoading()
         {
-            return SuppressMasterSceneLoading || IsCommandLineTestRun;
+            return SuppressMasterSceneLoading || IsCommandLineTestRun || IsUnityTestRunnerRunActive();
         }
 
         private static bool IsCommandLineTestRun =>
             Environment.GetCommandLineArgs()
                 .Any(arg => string.Equals(arg, "-runTests", StringComparison.OrdinalIgnoreCase));
+
+        private static bool IsUnityTestRunnerRunActive()
+        {
+            try
+            {
+                var testRunnerApiType = Type.GetType(
+                    "UnityEditor.TestTools.TestRunner.Api.TestRunnerApi, UnityEditor.TestRunner");
+
+                var isRunActiveMethod = testRunnerApiType?.GetMethod(
+                    "IsRunActive",
+                    BindingFlags.Static | BindingFlags.NonPublic);
+
+                return isRunActiveMethod != null && (bool)isRunActiveMethod.Invoke(null, null);
+            }
+            catch
+            {
+                return false;
+            }
+        }
 
         private static SceneSetup[] ScenesInHierarchyView
         {
