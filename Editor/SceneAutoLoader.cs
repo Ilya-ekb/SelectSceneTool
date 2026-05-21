@@ -13,15 +13,19 @@ namespace EditorTool.SceneSelectTool
         {
             EditorApplication.playModeStateChanged += OnPlayModeChanged;
         }
+
         private static void OnPlayModeChanged(PlayModeStateChange playModeStateChange)
         {
             switch (playModeStateChange)
             {
                 case PlayModeStateChange.ExitingEditMode:
                 {
-                    var masterSceneExistsInProject = AssetDatabase.AssetPathToGUID(MasterScene) != "";
-
                     ScenesInHierarchyView = new SceneSetup[] { };
+
+                    if (ShouldSkipMasterSceneLoading())
+                        break;
+
+                    var masterSceneExistsInProject = AssetDatabase.AssetPathToGUID(MasterScene) != "";
 
                     if (LoadMasterOnPlay && masterSceneExistsInProject)
                     {
@@ -89,6 +93,9 @@ namespace EditorTool.SceneSelectTool
         private static string CEditorPrefLoadedScenes =>
             "SceneAutoLoader." + PlayerSettings.productName + ".LoadedScenes";
 
+        private static string CSessionStateSuppressMasterSceneLoading =>
+            "SceneAutoLoader." + PlayerSettings.productName + ".SuppressMasterSceneLoading";
+
         public static bool LoadMasterOnPlay
         {
             get => EditorPrefs.GetBool(CEditorPrefLoadMasterOnPlay, false);
@@ -100,6 +107,21 @@ namespace EditorTool.SceneSelectTool
             get => EditorPrefs.GetString(CEditorPrefMasterScene, "Master.unity");
             set => EditorPrefs.SetString(CEditorPrefMasterScene, value);
         }
+
+        public static bool SuppressMasterSceneLoading
+        {
+            get => SessionState.GetBool(CSessionStateSuppressMasterSceneLoading, false);
+            set => SessionState.SetBool(CSessionStateSuppressMasterSceneLoading, value);
+        }
+
+        private static bool ShouldSkipMasterSceneLoading()
+        {
+            return SuppressMasterSceneLoading || IsCommandLineTestRun;
+        }
+
+        private static bool IsCommandLineTestRun =>
+            Environment.GetCommandLineArgs()
+                .Any(arg => string.Equals(arg, "-runTests", StringComparison.OrdinalIgnoreCase));
 
         private static SceneSetup[] ScenesInHierarchyView
         {

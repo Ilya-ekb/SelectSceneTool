@@ -43,6 +43,12 @@ namespace EditorTool.SceneSelectTool
                 SelectMasterScene(scenesPaths);
 
             GUILayout.Space(10);
+
+            GUILayout.Label("Play Tests", EditorStyles.boldLabel);
+            if (GUILayout.Button("Run PlayMode Tests (Ignore Master Scene)"))
+                PlayModeTestRunner.RunAllPlayModeTests();
+
+            GUILayout.Space(10);
             
             GUILayout.Label("Scenes", EditorStyles.boldLabel);
             DrawScenesList(scenesPaths);

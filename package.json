@@ -5,5 +5,7 @@
   "description": "Easy scene selection in Unity Editor",
   "author": { "name": "@oPlayI", "email": "2190055@gmail.com" },
   "keywords": ["scenes", "unity"],
-  "dependencies": {}
+  "dependencies": {
+    "com.unity.test-framework": "1.1.33"
+  }
 }

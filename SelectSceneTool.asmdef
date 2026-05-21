@@ -1,7 +1,9 @@
 {
     "name": "SelectSceneTool",
     "rootNamespace": "",
-    "references": [],
+    "references": [
+        "UnityEditor.TestRunner"
+    ],
     "includePlatforms": [
         "Editor"
     ],
