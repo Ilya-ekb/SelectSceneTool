@@ -12,7 +12,8 @@ namespace EditorTool.SceneSelectTool
 
         static PlayModeTestRunner()
         {
-            RegisterCallbacks();
+            if (SceneAutoLoader.SuppressMasterSceneLoading)
+                RegisterCallbacks();
         }
 
         [MenuItem("Tools/Scene Select Tool/Run PlayMode Tests")]
@@ -25,6 +26,7 @@ namespace EditorTool.SceneSelectTool
             }
 
             SceneAutoLoader.SuppressMasterSceneLoading = true;
+            RegisterCallbacks();
 
             var filter = new Filter
             {
@@ -49,6 +51,9 @@ namespace EditorTool.SceneSelectTool
 
         private static void RegisterCallbacks()
         {
+            if (sTestRunnerApi != null)
+                return;
+
             sTestCallbacks = new MasterScenePlayModeTestCallbacks();
 
 #pragma warning disable CS0618

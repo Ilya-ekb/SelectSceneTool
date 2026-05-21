@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -13,6 +12,13 @@ namespace EditorTool.SceneSelectTool
     /// </summary>
     public class SceneSelectTool : EditorWindow
     {
+        private const string ProjectScenesFolder = "Assets/Scenes/";
+
+        private static SceneCache sProjectScenesCache;
+        private static SceneCache sAllScenesCache;
+        private static GUIStyle sSceneButtonStyle;
+        private static bool sIsSubscribedToProjectChanges;
+
         private Vector2 mScrollPos;
         private bool mShowAllScenes;
 
@@ -23,24 +29,28 @@ namespace EditorTool.SceneSelectTool
             window.position = new Rect(window.position.xMin + 100f, window.position.yMin + 100f, 200f, 400f);
         }
 
+        internal void OnEnable()
+        {
+            EnsureProjectChangedSubscription();
+        }
+
         internal void OnGUI()
         {
+            EnsureProjectChangedSubscription();
+
             EditorGUILayout.BeginVertical();
             mScrollPos = EditorGUILayout.BeginScrollView(mScrollPos, false, false);
             GUILayout.Space(10);
             GUILayout.Label("Settings", EditorStyles.boldLabel);
             mShowAllScenes = GUILayout.Toggle(mShowAllScenes, "Show All Scenes in the Project");
             GUILayout.Space(10);
-            
-            var scenesGUIDs = AssetDatabase.FindAssets("t:Scene");
-            var scenesPaths = mShowAllScenes
-                ? scenesGUIDs.Select(AssetDatabase.GUIDToAssetPath).ToArray()
-                : scenesGUIDs.Select(AssetDatabase.GUIDToAssetPath).Where(s => s.StartsWith("Assets/Scenes/"))
-                    .ToArray();
+
+            var scenesCache = GetSceneCache(mShowAllScenes);
+
             GUILayout.Label("Master Loading", EditorStyles.boldLabel);
 
-            if(IsActiveMasterScene())
-                SelectMasterScene(scenesPaths);
+            if (IsActiveMasterScene())
+                SelectMasterScene(scenesCache);
 
             GUILayout.Space(10);
 
@@ -51,23 +61,82 @@ namespace EditorTool.SceneSelectTool
             GUILayout.Space(10);
             
             GUILayout.Label("Scenes", EditorStyles.boldLabel);
-            DrawScenesList(scenesPaths);
+            DrawScenesList(scenesCache);
 
             EditorGUILayout.EndScrollView();
             EditorGUILayout.EndVertical();
         }
 
-        private void DrawScenesList(IEnumerable<string> scenesPaths)
+        private static SceneCache GetSceneCache(bool showAllScenes)
         {
-            var scenesPathsArray = scenesPaths.ToArray();
-            foreach (var path in scenesPathsArray)
+            EnsureSceneCache();
+            return showAllScenes ? sAllScenesCache : sProjectScenesCache;
+        }
+
+        private static void EnsureSceneCache()
+        {
+            if (sProjectScenesCache != null && sAllScenesCache != null)
+                return;
+
+            var scenesGUIDs = AssetDatabase.FindAssets("t:Scene");
+            var allScenePaths = new List<string>(scenesGUIDs.Length);
+
+            foreach (var sceneGuid in scenesGUIDs)
             {
-                var sceneName = Path.GetFileNameWithoutExtension(path);
-                var pressed = GUILayout.Button(sceneName,
-                    new GUIStyle(GUI.skin.GetStyle("Button")) { alignment = TextAnchor.MiddleLeft });
-                if (pressed)
-                    if (EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
-                        EditorSceneManager.OpenScene(path);
+                var scenePath = AssetDatabase.GUIDToAssetPath(sceneGuid);
+
+                if (!string.IsNullOrEmpty(scenePath))
+                    allScenePaths.Add(scenePath);
+            }
+
+            allScenePaths.Sort(StringComparer.OrdinalIgnoreCase);
+
+            var projectScenePaths = new List<string>(allScenePaths.Count);
+
+            foreach (var scenePath in allScenePaths)
+            {
+                if (scenePath.StartsWith(ProjectScenesFolder, StringComparison.Ordinal))
+                    projectScenePaths.Add(scenePath);
+            }
+
+            sAllScenesCache = new SceneCache(allScenePaths.ToArray());
+            sProjectScenesCache = new SceneCache(projectScenePaths.ToArray());
+        }
+
+        private static void EnsureProjectChangedSubscription()
+        {
+            if (sIsSubscribedToProjectChanges)
+                return;
+
+            EditorApplication.projectChanged += ClearSceneCache;
+            sIsSubscribedToProjectChanges = true;
+        }
+
+        private static void ClearSceneCache()
+        {
+            sProjectScenesCache = null;
+            sAllScenesCache = null;
+        }
+
+        private static GUIStyle SceneButtonStyle
+        {
+            get
+            {
+                if (sSceneButtonStyle == null)
+                    sSceneButtonStyle = new GUIStyle(GUI.skin.GetStyle("Button")) { alignment = TextAnchor.MiddleLeft };
+
+                return sSceneButtonStyle;
+            }
+        }
+
+        private void DrawScenesList(SceneCache scenesCache)
+        {
+            for (var i = 0; i < scenesCache.Paths.Length; i++)
+            {
+                var pressed = GUILayout.Button(scenesCache.DisplayNames[i], SceneButtonStyle);
+
+                if (pressed && EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+                    EditorSceneManager.OpenScene(scenesCache.Paths[i]);
             }
         }
 
@@ -83,22 +152,43 @@ namespace EditorTool.SceneSelectTool
             return newLoadMasterOnPlay;
         }
         
-        private void SelectMasterScene(string[] scenePaths)
+        private void SelectMasterScene(SceneCache scenesCache)
         {
             var previousMasterScene = SceneAutoLoader.MasterScene;
 
-            scenePaths = new[] { string.Empty }.Concat(scenePaths).ToArray();
-            var displayNames = new[] { "<No scene chosen>" }
-                .Concat(scenePaths.Where(s => !string.IsNullOrEmpty(s)).Select(Path.GetFileNameWithoutExtension))
-                .ToArray();
+            var previousSelectedIndex = Math.Max(Array.IndexOf(scenesCache.PopupPaths, previousMasterScene), 0);
+            var newSelectedIndex = EditorGUILayout.Popup("Master Scene", previousSelectedIndex, scenesCache.PopupDisplayNames);
             
-            var previousSelectedIndex = Math.Max(Array.IndexOf(scenePaths, previousMasterScene), 0);
-            var newSelectedIndex = EditorGUILayout.Popup("Master Scene", previousSelectedIndex, displayNames);
-            
-            var newMasterScene = newSelectedIndex > 0 ? scenePaths[newSelectedIndex] : "";
+            var newMasterScene = newSelectedIndex > 0 ? scenesCache.PopupPaths[newSelectedIndex] : "";
 
             if (newMasterScene != previousMasterScene)
                 SceneAutoLoader.MasterScene = newMasterScene;
+        }
+
+        private sealed class SceneCache
+        {
+            public readonly string[] Paths;
+            public readonly string[] DisplayNames;
+            public readonly string[] PopupPaths;
+            public readonly string[] PopupDisplayNames;
+
+            public SceneCache(string[] paths)
+            {
+                Paths = paths;
+                DisplayNames = new string[paths.Length];
+
+                for (var i = 0; i < paths.Length; i++)
+                    DisplayNames[i] = Path.GetFileNameWithoutExtension(paths[i]);
+
+                PopupPaths = new string[paths.Length + 1];
+                PopupDisplayNames = new string[paths.Length + 1];
+
+                PopupPaths[0] = string.Empty;
+                PopupDisplayNames[0] = "<No scene chosen>";
+
+                Array.Copy(paths, 0, PopupPaths, 1, paths.Length);
+                Array.Copy(DisplayNames, 0, PopupDisplayNames, 1, DisplayNames.Length);
+            }
         }
     }
 }

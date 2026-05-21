@@ -10,6 +10,15 @@ namespace EditorTool.SceneSelectTool
     [InitializeOnLoad]
     public static class SceneAutoLoader
     {
+        private const string TestRunnerApiTypeName = "UnityEditor.TestTools.TestRunner.Api.TestRunnerApi, UnityEditor.TestRunner";
+
+        private static readonly bool sIsCommandLineTestRun =
+            Environment.GetCommandLineArgs()
+                .Any(arg => string.Equals(arg, "-runTests", StringComparison.OrdinalIgnoreCase));
+
+        private static MethodInfo sIsRunActiveMethod;
+        private static bool sDidResolveIsRunActiveMethod;
+
         static SceneAutoLoader()
         {
             EditorApplication.playModeStateChanged += OnPlayModeChanged;
@@ -117,30 +126,39 @@ namespace EditorTool.SceneSelectTool
 
         private static bool ShouldSkipMasterSceneLoading()
         {
-            return SuppressMasterSceneLoading || IsCommandLineTestRun || IsUnityTestRunnerRunActive();
+            return SuppressMasterSceneLoading || sIsCommandLineTestRun || IsUnityTestRunnerRunActive();
         }
-
-        private static bool IsCommandLineTestRun =>
-            Environment.GetCommandLineArgs()
-                .Any(arg => string.Equals(arg, "-runTests", StringComparison.OrdinalIgnoreCase));
 
         private static bool IsUnityTestRunnerRunActive()
         {
+            var isRunActiveMethod = GetIsRunActiveMethod();
+
+            if (isRunActiveMethod == null)
+                return false;
+
             try
             {
-                var testRunnerApiType = Type.GetType(
-                    "UnityEditor.TestTools.TestRunner.Api.TestRunnerApi, UnityEditor.TestRunner");
-
-                var isRunActiveMethod = testRunnerApiType?.GetMethod(
-                    "IsRunActive",
-                    BindingFlags.Static | BindingFlags.NonPublic);
-
-                return isRunActiveMethod != null && (bool)isRunActiveMethod.Invoke(null, null);
+                return isRunActiveMethod.Invoke(null, null) is bool isActive && isActive;
             }
             catch
             {
                 return false;
             }
+        }
+
+        private static MethodInfo GetIsRunActiveMethod()
+        {
+            if (sDidResolveIsRunActiveMethod)
+                return sIsRunActiveMethod;
+
+            sDidResolveIsRunActiveMethod = true;
+
+            var testRunnerApiType = Type.GetType(TestRunnerApiTypeName);
+            sIsRunActiveMethod = testRunnerApiType?.GetMethod(
+                "IsRunActive",
+                BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
+
+            return sIsRunActiveMethod;
         }
 
         private static SceneSetup[] ScenesInHierarchyView
